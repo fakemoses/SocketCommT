@@ -15,73 +15,72 @@ namespace SocketCommT.client
         private readonly int serverPort;
         private readonly string clientId;
         private Socket clientSocket;
+        private Thread receiveThread;
+
+        public event EventHandler<string> MessageReceived;
 
         public Client(string serverIp, int serverPort)
         {
             this.serverIp = serverIp;
             this.serverPort = serverPort;
-            clientId = Guid.NewGuid().ToString();
+        }
+        public void Connect()
+        {
+            // Create a new TCP/IP socket
+            clientSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+            // Connect to the remote host
+            clientSocket.Connect(IPAddress.Parse(serverIp), serverPort);
+
+            // Start a new thread to receive messages from the server
+            receiveThread = new Thread(ReceiveMessages);
+            receiveThread.IsBackground = true;
+            receiveThread.Start();
         }
 
-        public void Start()
+        public void Disconnect()
         {
-            try
+            // Close the socket and stop the receive thread
+            if (clientSocket != null && clientSocket.Connected)
             {
-                //internetwork -> defining for IPV4
-                clientSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                clientSocket.Connect(new IPEndPoint(IPAddress.Parse(serverIp), serverPort));
-                Console.WriteLine("Connected to FormServer");
-
-                Thread receiveThread = new Thread(ReceiveMessages);
-                receiveThread.Start();
-
-                while (true)
-                {
-                    Console.Write("Enter recipient ID (or 'exit' to quit): ");
-                    string recipientId = Console.ReadLine();
-                    if (recipientId == "exit")
-                    {
-                        break;
-                    }
-
-                    Console.Write("Enter message: ");
-                    string content = Console.ReadLine();
-                    string message = recipientId + "||" + content;
-                    clientSocket.Send(Encoding.UTF8.GetBytes(message));
-                }
-
-                Console.WriteLine("Closing connection...");
                 clientSocket.Shutdown(SocketShutdown.Both);
                 clientSocket.Close();
-
             }
-
-            catch (Exception e)
-            {
-
-                Console.WriteLine(e.ToString());
-            }
-
-
+            receiveThread?.Join();
+        }
+        public void SendMessage(string message)
+        {
+            // Send the message to the server
+            byte[] buffer = Encoding.UTF8.GetBytes(message);
+            clientSocket.Send(buffer);
         }
 
         private void ReceiveMessages()
         {
-            byte[] buffer = new byte[1024];
-            while (true)
+            while (clientSocket.Connected)
             {
-                int bytesReceived = clientSocket.Receive(buffer);
-                if (bytesReceived == 0)
+                try
                 {
+                    // Receive messages from the server
+                    byte[] buffer = new byte[1024];
+                    int bytesReceived = clientSocket.Receive(buffer);
+                    if (bytesReceived > 0)
+                    {
+                        string message = Encoding.UTF8.GetString(buffer, 0, bytesReceived);
+                        MessageReceived?.Invoke(this, message);
+                    }
+                }
+                catch (SocketException)
+                {
+                    // Connection was closed
                     break;
                 }
-
-                string message = Encoding.UTF8.GetString(buffer, 0, bytesReceived);
-                Console.WriteLine("Received message: {0}", message);
             }
-            Console.WriteLine("Disconnected from FormServer");
         }
-    }
+
+
+
+        }
 
 
 }

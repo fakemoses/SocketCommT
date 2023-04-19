@@ -18,11 +18,13 @@ namespace SocketCommT.form
         private const int serverPort = 6000;
         private const string serverIp = "127.0.0.1";
         private Client client;
-        private readonly Thread clientThread;
 
         public FormClient()
         {
             InitializeComponent();
+            client = new Client(serverIp, serverPort);
+            client.MessageReceived += UpdateStatus;
+            client.Connect();
         }
 
         private void bexit_Click(object sender, EventArgs e)
@@ -32,20 +34,15 @@ namespace SocketCommT.form
 
         private void bsend_Click(object sender, EventArgs e)
         {
-
-        }
-
-        private void UpdateStatus(string status)
-        {
-            if (InvokeRequired)
+            if (!string.IsNullOrWhiteSpace(textBox2.Text))
             {
-                Invoke(new Action<string>(UpdateStatus), status);
-                return;
+                client.SendMessage(textBox2.Text);
+                textBox2.Text = "";
             }
-
-            // Update the GUI here
-            textBox1.AppendText(status);
-
+            else
+            {
+                textBox2.Text = "";
+            }
         }
 
         private void onEnterPressed(object sender, KeyEventArgs e)
@@ -56,14 +53,25 @@ namespace SocketCommT.form
                 //check if empty or just spaces
                 if (!string.IsNullOrWhiteSpace(textBox2.Text))
                 {
-                    //do something
-                }else
+                    client.SendMessage(textBox2.Text);
+                    textBox2.Text= "";
+                }
+                else
                 {
                     textBox2.Text = "";
                 }
 
                 
             }
+        }
+        private void UpdateStatus(object sender, string message)
+        {
+                Invoke(new Action(() => AddMessageToChatHistory(message)));
+        }
+
+        private void AddMessageToChatHistory(string message)
+        {
+            textBox1.AppendText(message + Environment.NewLine);
         }
     }
 }
