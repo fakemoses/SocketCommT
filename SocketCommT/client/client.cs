@@ -5,66 +5,55 @@ using System.Net.Sockets;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace SocketCommT.client
 {
     class Client
     {
-        public Client()
-        {
+        private readonly string serverIp;
+        private readonly int serverPort;
+        private readonly string clientId;
+        private Socket clientSocket;
 
+        public Client(string serverIp, int serverPort)
+        {
+            this.serverIp = serverIp;
+            this.serverPort = serverPort;
+            clientId = Guid.NewGuid().ToString();
         }
 
-        public static void RunClient()
+        public void Start()
         {
             try
             {
-                IPHostEntry ipHost = Dns.GetHostEntry(Dns.GetHostName());
-                IPAddress ipAddr = ipHost.AddressList[0];
-                IPEndPoint localEndPoint = new IPEndPoint(ipAddr, 6000);
+                //internetwork -> defining for IPV4
+                clientSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                clientSocket.Connect(new IPEndPoint(IPAddress.Parse(serverIp), serverPort));
+                Console.WriteLine("Connected to FormServer");
 
-                // Creation TCP/IP Socket using
-                // Socket Class Constructor
-                Socket sender = new Socket(ipAddr.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                Thread receiveThread = new Thread(ReceiveMessages);
+                receiveThread.Start();
 
-                try
+                while (true)
                 {
-                    sender.Connect(localEndPoint);
+                    Console.Write("Enter recipient ID (or 'exit' to quit): ");
+                    string recipientId = Console.ReadLine();
+                    if (recipientId == "exit")
+                    {
+                        break;
+                    }
 
-                    Console.WriteLine("Socket connected to -> {0} ",sender.RemoteEndPoint.ToString());
-                    byte[] messageSent = Encoding.ASCII.GetBytes("Test Client<EOF>");
-                    int byteSent = sender.Send(messageSent);
-
-                    // Data buffer
-                    byte[] messageReceived = new byte[1024];
-
-                    int byteRecv = sender.Receive(messageReceived);
-                    Console.WriteLine("Message from Server -> {0}",
-                          Encoding.ASCII.GetString(messageReceived,
-                                                     0, byteRecv));
-
-                    // Close Socket using
-                    // the method Close()
-                    sender.Shutdown(SocketShutdown.Both);
-                    sender.Close();
+                    Console.Write("Enter message: ");
+                    string content = Console.ReadLine();
+                    string message = recipientId + "||" + content;
+                    clientSocket.Send(Encoding.UTF8.GetBytes(message));
                 }
 
-                catch (ArgumentNullException ane)
-                {
+                Console.WriteLine("Closing connection...");
+                clientSocket.Shutdown(SocketShutdown.Both);
+                clientSocket.Close();
 
-                    Console.WriteLine("ArgumentNullException : {0}", ane.ToString());
-                }
-
-                catch (SocketException se)
-                {
-
-                    Console.WriteLine("SocketException : {0}", se.ToString());
-                }
-
-                catch (Exception e)
-                {
-                    Console.WriteLine("Unexpected exception : {0}", e.ToString());
-                }
             }
 
             catch (Exception e)
@@ -74,6 +63,23 @@ namespace SocketCommT.client
             }
 
 
+        }
+
+        private void ReceiveMessages()
+        {
+            byte[] buffer = new byte[1024];
+            while (true)
+            {
+                int bytesReceived = clientSocket.Receive(buffer);
+                if (bytesReceived == 0)
+                {
+                    break;
+                }
+
+                string message = Encoding.UTF8.GetString(buffer, 0, bytesReceived);
+                Console.WriteLine("Received message: {0}", message);
+            }
+            Console.WriteLine("Disconnected from FormServer");
         }
     }
 
